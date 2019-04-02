@@ -50,13 +50,14 @@ public class Fedora4IndexIntegrationRoute extends RouteBuilder {
                 .setHeader(HttpHeaders.ACCEPT, constant("application/rdf+xml"))
                 .setHeader(Exchange.HTTP_URI, exchangeProperty("fedoraUri"))
                 .setHeader(Exchange.HTTP_METHOD, GET) // default would be post
-                .to("http4://fedora?authUsername=fedoraAdmin&authPassword=secret3")
-                .log("${body}");
+                .to("http4://fedora?authUsername=fedoraAdmin&authPassword=secret3");
 
         // Route to handle resource modifications
         from("direct:modified").id("handle-modifications")
                 .log("Resource ${exchangeProperty.fedoraUri} was modified")
-                .to("direct:fcrepo-resource");
+                .to("direct:fcrepo-resource")
+                .to("xslt:fedora2solr.xsl")
+                .log("${body}");
 
     }
 }
