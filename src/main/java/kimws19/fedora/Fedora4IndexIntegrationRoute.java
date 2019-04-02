@@ -17,6 +17,7 @@ import static org.apache.camel.component.jms.JmsComponent.jmsComponentAutoAcknow
 public class Fedora4IndexIntegrationRoute extends RouteBuilder {
 
     private static final String RESOURCE = "http://fedora.info/definitions/v4/repository#Resource";
+    private static final String RESOURCE_DELETION = "http://fedora.info/definitions/v4/event#ResourceDeletion";
     private static final String RESOURCE_MODIFICATION = "http://fedora.info/definitions/v4/event#ResourceModification";
 
     @Override
@@ -41,6 +42,8 @@ public class Fedora4IndexIntegrationRoute extends RouteBuilder {
 
                 // Choose where to route events to
                 .choice()
+                    .when(exchangeProperty("fedoraEvents").contains(RESOURCE_DELETION))
+                        .to("direct:deleted")
                     .when(exchangeProperty("fedoraEvents").contains(RESOURCE_MODIFICATION))
                         .to("direct:modified")
                 .otherwise()
@@ -60,12 +63,25 @@ public class Fedora4IndexIntegrationRoute extends RouteBuilder {
                 .to("xslt:fedora2solr.xsl")
                 .to("direct:solr-ingest");
 
+        // Route to handle resource deletions
+        from("direct:deleted").id("handle-deletions")
+                .log("Resource ${exchangeProperty.fedoraUri} was deleted")
+                .to("direct:solr-delete");
+
         // Route to ingest `add` document to Solr
         from("direct:solr-ingest").id("solr-ingest-document")
                 .log("Ingesting ${exchangeProperty.fedoraUri} to Solr")
                 .setHeader(Exchange.CONTENT_TYPE, constant(null)) // Solr component bug
                 .setHeader(SolrConstants.OPERATION, constant(SolrConstants.OPERATION_INSERT))
                 .to("solr://localhost:8080/solr/collection1")
+                .to("direct:solr-commit");
+
+        // Route to send `delete` document to Solr
+        from("direct:solr-delete").id("solr-delete-document")
+                .log("Deleting ${exchangeProperty.fedoraUri} from Solr")
+                .setBody(exchangeProperty("fedoraUri"))
+                .setHeader(SolrConstants.OPERATION, constant(SolrConstants.OPERATION_DELETE_BY_ID))
+                .to("solr://localhost:8080/solr")
                 .to("direct:solr-commit");
 
         // Route to issue commit for a Solr core
