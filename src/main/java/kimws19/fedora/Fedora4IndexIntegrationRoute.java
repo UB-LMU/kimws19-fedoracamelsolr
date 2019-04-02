@@ -5,6 +5,7 @@ import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
 import org.apache.camel.LoggingLevel;
 import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.component.solr.SolrConstants;
 import org.apache.http.HttpHeaders;
 
 import javax.jms.ConnectionFactory;
@@ -57,7 +58,20 @@ public class Fedora4IndexIntegrationRoute extends RouteBuilder {
                 .log("Resource ${exchangeProperty.fedoraUri} was modified")
                 .to("direct:fcrepo-resource")
                 .to("xslt:fedora2solr.xsl")
-                .log("${body}");
+                .to("direct:solr-ingest");
+
+        // Route to ingest `add` document to Solr
+        from("direct:solr-ingest").id("solr-ingest-document")
+                .log("Ingesting ${exchangeProperty.fedoraUri} to Solr")
+                .setHeader(Exchange.CONTENT_TYPE, constant(null)) // Solr component bug
+                .setHeader(SolrConstants.OPERATION, constant(SolrConstants.OPERATION_INSERT))
+                .to("solr://localhost:8080/solr/collection1")
+                .to("direct:solr-commit");
+
+        // Route to issue commit for a Solr core
+        from("direct:solr-commit")
+                .setHeader(SolrConstants.OPERATION, constant(SolrConstants.OPERATION_COMMIT))
+                .to("solr://localhost:8080/solr/collection1");
 
     }
 }
