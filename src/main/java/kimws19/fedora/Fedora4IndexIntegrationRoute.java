@@ -30,6 +30,12 @@ public class Fedora4IndexIntegrationRoute extends RouteBuilder {
         ConnectionFactory connectionFactory = new ActiveMQConnectionFactory("tcp://localhost:61616");
         context.addComponent("jms", jmsComponentAutoAcknowledge(connectionFactory));
 
+        // Configure global error handling with 5 redelivery attempts and dead letter channel
+        errorHandler(deadLetterChannel("log:dead?level=ERROR")
+                .maximumRedeliveries(5)
+                .retryAttemptedLogLevel(LoggingLevel.WARN)
+                .redeliveryDelay(5000));
+
         from("jms:topic:fedora").id("consume-jms-messages")
                 // Route for receiving JMS messages from Fedora
                 .setProperty("fedoraEvents", jsonpath("wasGeneratedBy.type", List.class))
