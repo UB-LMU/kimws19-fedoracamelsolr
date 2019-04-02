@@ -2,6 +2,7 @@ package kimws19.fedora;
 
 import org.apache.activemq.ActiveMQConnectionFactory;
 import org.apache.camel.CamelContext;
+import org.apache.camel.LoggingLevel;
 import org.apache.camel.builder.RouteBuilder;
 
 import javax.jms.ConnectionFactory;
@@ -12,6 +13,7 @@ import static org.apache.camel.component.jms.JmsComponent.jmsComponentAutoAcknow
 public class Fedora4IndexIntegrationRoute extends RouteBuilder {
 
     private static final String RESOURCE = "http://fedora.info/definitions/v4/repository#Resource";
+    private static final String RESOURCE_MODIFICATION = "http://fedora.info/definitions/v4/event#ResourceModification";
 
     @Override
     public void configure() {
@@ -33,6 +35,16 @@ public class Fedora4IndexIntegrationRoute extends RouteBuilder {
                 .filter(header("org.fcrepo.jms.identifier").startsWith("/"))
                 .filter(exchangeProperty("fedoraType").contains(RESOURCE))
 
-                .log("${body}");
+                // Choose where to route events to
+                .choice()
+                    .when(exchangeProperty("fedoraEvents").contains(RESOURCE_MODIFICATION))
+                        .to("direct:modified")
+                .otherwise()
+                    .log(LoggingLevel.ERROR, "Unexpected events: ${exchangeProperty.fedoraEvents}");
+
+        // Route to handle resource modifications
+        from("direct:modified").id("handle-modifications")
+                .log("Resource ${exchangeProperty.fedoraUri} was modified");
+
     }
 }
